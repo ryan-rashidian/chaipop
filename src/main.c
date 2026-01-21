@@ -20,8 +20,10 @@
 
 bool stack_view_option = false;
 
-int stack[VM_STACK_SIZE];
-int sp = 0;
+struct VM {
+    int stack[VM_STACK_SIZE];
+    int sp;
+} vm = {0};
 
 static const char *instr_map[NUM_INSTR] = {
     "PUSH",
@@ -78,8 +80,8 @@ void terminate(void);
 void terminate_err(const char *message);
 void prog_init(size_t size);
 void prog_destroy(void);
-static size_t prog_count_instr(FILE *fp);
-static int    prog_parse_value(FILE *fp);
+static size_t  prog_count_instr(FILE *fp);
+static int     prog_parse_value(FILE *fp);
 static Instr   prog_parse_instr(FILE *fp);
 void prog_read(int argc, char *argv[]);
 void stack_print(void);
@@ -228,10 +230,10 @@ void prog_read(int argc, char *argv[])
 
 void stack_print(void)
 {
-    if (sp > 0) {
+    if (vm.sp > 0) {
         printf("PC %3d:  ", prog->pc);
-        for (int i = 0; i < sp; i++) {
-            printf("[%2X] ", stack[i]);
+        for (int i = 0; i < vm.sp; i++) {
+            printf("[%5d] ", vm.stack[i]);
         }
         printf("\n");
     }
@@ -239,18 +241,18 @@ void stack_print(void)
 
 void op_push(int value)
 {
-    if (sp >= VM_STACK_SIZE) {
+    if (vm.sp >= VM_STACK_SIZE) {
         terminate_err("Error: stack overflow");
     }
-    stack[sp++] = value;
+    vm.stack[vm.sp++] = value;
 }
 
 int op_pop(void)
 {
-    if (sp <= 0) {
+    if (vm.sp <= 0) {
         terminate_err("Error: stack underflow");
     }
-    return stack[--sp];
+    return vm.stack[--vm.sp];
 }
 
 void op_add(void)
@@ -342,21 +344,21 @@ void op_jmpnz(int value)
 
 void op_dup(void)
 {
-    if (sp <= 0) {
+    if (vm.sp <= 0) {
         terminate_err("Error: stack underflow");
     }
-    int dup_opnd = stack[sp-1];
+    int dup_opnd = vm.stack[vm.sp-1];
     op_push(dup_opnd);
 }
 
 void op_swap(void)
 {
-    if (sp < 2) {
+    if (vm.sp < 2) {
         terminate_err("Error: stack underflow");
     }
-    int tmp_opnd = stack[sp-1];
-    stack[sp-1] = stack[sp-2];
-    stack[sp-2] = tmp_opnd;
+    int tmp_opnd = vm.stack[vm.sp-1];
+    vm.stack[vm.sp-1] = vm.stack[vm.sp-2];
+    vm.stack[vm.sp-2] = tmp_opnd;
 }
 
 void vm_loop(void)
