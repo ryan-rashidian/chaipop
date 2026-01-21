@@ -18,6 +18,8 @@
 #define INSTR_MAXLEN 10
 #define NUM_INSTR 17
 
+bool stack_view_option = false;
+
 int stack[VM_STACK_SIZE];
 int sp = 0;
 
@@ -80,6 +82,7 @@ static size_t prog_count_instr(FILE *fp);
 static int    prog_parse_value(FILE *fp);
 static Instr   prog_parse_instr(FILE *fp);
 void prog_read(int argc, char *argv[]);
+void stack_print(void);
 void op_push(int value);
 int  op_pop(void);
 void op_add(void);
@@ -202,7 +205,7 @@ void prog_read(int argc, char *argv[])
     FILE *fp;
     size_t n_instr;
 
-    if (argc != 2) {
+    if (argc < 2) {
         terminate_err("Usage: rvm <filename>");
     }
 
@@ -221,6 +224,17 @@ void prog_read(int argc, char *argv[])
     prog->program[n_instr-1].type = INSTR_HALT;
 
     fclose(fp);
+}
+
+void stack_print(void)
+{
+    if (sp > 0) {
+        printf("PC %3d:  ", prog->pc);
+        for (int i = 0; i < sp; i++) {
+            printf("[%2X] ", stack[i]);
+        }
+        printf("\n");
+    }
 }
 
 void op_push(int value)
@@ -423,11 +437,21 @@ void vm_loop(void)
             }
             default: break;
         }
+
+        if (stack_view_option) {
+            stack_print();
+        }
     }
 }
 
 int main(int argc, char *argv[])
 {
+    if (argc == 3) {
+        if (strcmp(argv[2], "--view") == 0) {
+            stack_view_option = true;
+        }
+    }
+
     prog_read(argc, argv);
     vm_loop();
 
