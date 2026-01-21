@@ -83,8 +83,8 @@ void prog_destroy(void);
 static size_t  prog_count_instr(FILE *fp);
 static int     prog_parse_value(FILE *fp);
 static Instr   prog_parse_instr(FILE *fp);
-void prog_read(int argc, char *argv[]);
-void stack_print(void);
+void prog_read(char *filename);
+void stack_print(Instr_Type opcode);
 void op_push(int value);
 int  op_pop(void);
 void op_add(void);
@@ -202,16 +202,12 @@ static Instr prog_parse_instr(FILE *fp)
     return new_instr;
 }
 
-void prog_read(int argc, char *argv[])
+void prog_read(char *filename)
 {
     FILE *fp;
     size_t n_instr;
 
-    if (argc < 2) {
-        terminate_err("Usage: rvm <filename>");
-    }
-
-    if ((fp = fopen(argv[1], "r")) == NULL) {
+    if ((fp = fopen(filename, "r")) == NULL) {
         terminate_err("Error: failed to open file");
     }
 
@@ -228,10 +224,10 @@ void prog_read(int argc, char *argv[])
     fclose(fp);
 }
 
-void stack_print(void)
+void stack_print(Instr_Type opcode)
 {
     if (vm.sp > 0) {
-        printf("PC %3d:  ", prog->pc);
+        printf("OP %2X | PC %3d:  ", opcode, prog->pc);
         for (int i = 0; i < vm.sp; i++) {
             printf("[%5d] ", vm.stack[i]);
         }
@@ -441,20 +437,23 @@ void vm_loop(void)
         }
 
         if (stack_view_option) {
-            stack_print();
+            stack_print(instr.type);
         }
     }
 }
 
 int main(int argc, char *argv[])
 {
+    if (argc < 2) {
+        terminate_err("Usage: chaipop <filename>");
+    }
     if (argc == 3) {
         if (strcmp(argv[2], "--view") == 0) {
             stack_view_option = true;
         }
     }
 
-    prog_read(argc, argv);
+    prog_read(argv[1]);
     vm_loop();
 
     if (prog != NULL) {
