@@ -1,8 +1,8 @@
 # chaipop
 
-**This project is for fun/learning purposes.**
-
 Stack-based virtual machine and instruction interpreter in C.
+
+**This project is for fun/learning purposes.**
 
 ## Build
 
@@ -33,9 +33,17 @@ An example program that computes `n!` is given to demonstrate. The first `PUSH` 
 ./chaipop factorial.cpop
 ```
 
+The `--view` option prints a formatted view of the stack after each instruction is executed. The following syntax should be used: `chaipop <filename> --view`.
+
 The most important rules are:
-- Operands must be integer values.
+- Operands must be a integer value.
 - Instructions are read by the interpreter one-per-line. Adding multiple instructions on a single line will result in an error.
 - The VM interpreter will automatically place a single `HALT` instruction at the end of a program.
 - Jump instructions require an operand that will set the program counter backward, or forward relative to the jump instruction's location in the program. Negative integer values set it backward, and positive integer values set it forward.
+
+## Possible Improvements and Ideas
+
+- More instructions
+- Compile source file to bytecode
+- REPL
 
