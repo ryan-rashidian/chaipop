@@ -1,5 +1,5 @@
 /*
- * File: main.c
+ * File: chaipop.c
  * Date: 2026-01-20
  *
  * Virtual Machine in C. (for fun/learning)
@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #define VM_STACK_SIZE 256
@@ -21,7 +22,7 @@
 bool stack_view_option = false;
 
 struct VM {
-    int stack[VM_STACK_SIZE];
+    int16_t stack[VM_STACK_SIZE];
     int sp;
 } vm = {0};
 
@@ -67,7 +68,7 @@ typedef enum {
 
 typedef struct {
     Instr_Type type;
-    int value;
+    int16_t value;
 } Instr;
 
 struct Program {
