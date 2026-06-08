@@ -17,16 +17,75 @@
 
 #define VM_STACK_SIZE 256
 #define INSTR_MAXLEN 10
-#define NUM_INSTR 17
 
-bool stack_view_option = false;
+//-----------------------------------------------------------------------------
+// Typedefs and enums
+//-----------------------------------------------------------------------------
 
-struct VM {
-    int16_t stack[VM_STACK_SIZE];
-    int sp;
-} vm = {0};
+typedef enum {
+    INSTR_PUSH  = 0,
+    INSTR_POP   = 1,
+    INSTR_ADD   = 2,
+    INSTR_SUB   = 3,
+    INSTR_MUL   = 4,
+    INSTR_EQ    = 5,
+    INSTR_LT    = 6,
+    INSTR_GT    = 7,
+    INSTR_AND   = 8,
+    INSTR_OR    = 9,
+    INSTR_XOR   = 10,
+    INSTR_JMP   = 11,
+    INSTR_JMPZ  = 12,
+    INSTR_JMPNZ = 13,
+    INSTR_DUP   = 14,
+    INSTR_SWAP  = 15,
+    INSTR_HALT  = 16,
+    INSTR_COUNT
+} Instr_Type;
 
-static const char *instr_map[NUM_INSTR] = {
+typedef struct {
+    Instr_Type type;
+    int16_t value;
+} Instr;
+
+//-----------------------------------------------------------------------------
+// Forward function declarations
+//-----------------------------------------------------------------------------
+
+void terminate(void);
+void terminate_err(const char *message);
+void prog_init(size_t size);
+void prog_destroy(void);
+
+void op_push(int value);
+int  op_pop(void);
+void op_add(void);
+void op_sub(void);
+void op_mul(void);
+void op_eq(void);
+void op_lt(void);
+void op_gt(void);
+void op_and(void);
+void op_or(void);
+void op_xor(void);
+void op_jmp(int value);
+void op_jmpz(int value);
+void op_jmpnz(int value);
+void op_dup(void);
+void op_swap(void);
+
+static size_t  prog_count_instr(FILE *fp);
+static int     prog_parse_value(FILE *fp);
+static Instr   prog_parse_instr(FILE *fp);
+void prog_read(char *filename);
+void stack_print(Instr_Type opcode);
+void vm_loop(void);
+
+//-----------------------------------------------------------------------------
+// Global variables
+//-----------------------------------------------------------------------------
+
+static const char *instr_map[INSTR_COUNT] = {
     "PUSH",
     "POP",
     "ADD",
@@ -46,195 +105,54 @@ static const char *instr_map[NUM_INSTR] = {
     "HALT"
 };
 
-typedef enum {
-    INSTR_PUSH  = 0,
-    INSTR_POP   = 1,
-    INSTR_ADD   = 2,
-    INSTR_SUB   = 3,
-    INSTR_MUL   = 4,
-    INSTR_EQ    = 5,
-    INSTR_LT    = 6,
-    INSTR_GT    = 7,
-    INSTR_AND   = 8,
-    INSTR_OR    = 9,
-    INSTR_XOR   = 10,
-    INSTR_JMP   = 11,
-    INSTR_JMPZ  = 12,
-    INSTR_JMPNZ = 13,
-    INSTR_DUP   = 14,
-    INSTR_SWAP  = 15,
-    INSTR_HALT  = 16
-} Instr_Type;
-
-typedef struct {
-    Instr_Type type;
-    int16_t value;
-} Instr;
-
-struct Program {
-    size_t size;
+static struct VM {
+    int sp;
     int pc;
-    Instr program[];
-} *prog;
+    int16_t stack[VM_STACK_SIZE];
+    Instr *program;
+    size_t program_size;
+} vm = { 0 };
 
-void terminate(void);
-void terminate_err(const char *message);
-void prog_init(size_t size);
-void prog_destroy(void);
-static size_t  prog_count_instr(FILE *fp);
-static int     prog_parse_value(FILE *fp);
-static Instr   prog_parse_instr(FILE *fp);
-void prog_read(char *filename);
-void stack_print(Instr_Type opcode);
-void op_push(int value);
-int  op_pop(void);
-void op_add(void);
-void op_sub(void);
-void op_mul(void);
-void op_eq(void);
-void op_lt(void);
-void op_gt(void);
-void op_and(void);
-void op_or(void);
-void op_xor(void);
-void op_jmp(int value);
-void op_jmpz(int value);
-void op_jmpnz(int value);
-void op_dup(void);
-void op_swap(void);
-void vm_loop(void);
+static bool opt_view = false;
+
+//-----------------------------------------------------------------------------
+// Initialization and cleanup
+//-----------------------------------------------------------------------------
 
 void terminate(void)
 {
-    if (prog != NULL) {
-        prog_destroy();
-    }
+    prog_destroy();
     exit(EXIT_SUCCESS);
 }
 
 void terminate_err(const char *message)
 {
-    if (prog != NULL) {
-        prog_destroy();
-    }
+    prog_destroy();
     fprintf(stderr, "%s\n", message);
     exit(EXIT_FAILURE);
 }
 
 void prog_init(size_t size)
 {
-    prog = malloc(sizeof(struct Program) + size * sizeof(Instr));
-    if (prog == NULL) {
+    vm.program = malloc(size * sizeof(Instr));
+    if (vm.program == NULL) {
         terminate_err("Error: failed to allocate memory for program");
     }
-    prog->size = size;
-    prog->pc = 0;
+    vm.program_size = size;
+    vm.pc = 0;
 }
 
 void prog_destroy(void)
 {
-    free(prog);
-    prog = NULL;
+    if (vm.program == NULL) return;
+
+    free(vm.program);
+    vm.program = NULL;
 }
 
-static size_t prog_count_instr(FILE *fp)
-{
-    int ch;
-    bool blank = true;
-    size_t n_instr = 0;
-
-    while ((ch = getc(fp)) != EOF) {
-        if (ch == '\n' && !blank) {
-            ++n_instr;
-            blank = true;
-        } else if (ch == '\n' && blank) {
-            ;
-        } else {
-            blank = false;
-        }
-    }
-
-    if (!blank) {
-        ++n_instr;
-    }
-
-    return n_instr;
-}
-
-static int prog_parse_value(FILE *fp)
-{
-    int value;
-    if (fscanf(fp, " %d", &value) == 1) {
-        return value;
-    } else {
-        terminate_err("Error: missing operand");
-    }
-    return 0;
-}
-
-static Instr prog_parse_instr(FILE *fp)
-{
-    char instr_in[INSTR_MAXLEN+1];
-    Instr new_instr;
-
-    if (fscanf(fp, " %s", instr_in) == 1) {
-        bool valid_instr = false;
-
-        for (int i = 0; i < NUM_INSTR; i++) {
-            if (strcmp(instr_in, instr_map[i]) == 0) {
-                valid_instr = true;
-                if (i == INSTR_PUSH || i == INSTR_JMP ||
-                    i == INSTR_JMPZ || i == INSTR_JMPNZ
-                ) {
-                    int value = prog_parse_value(fp);
-                    new_instr.value = value;
-                }
-                new_instr.type = i;
-            }
-        }
-
-        if (!valid_instr) {
-            terminate_err("Error: invalid instruction");
-        }
-    } else {
-        terminate_err("Error: failed to read instruction");
-    }
-    
-    return new_instr;
-}
-
-void prog_read(char *filename)
-{
-    FILE *fp;
-    size_t n_instr;
-
-    if ((fp = fopen(filename, "r")) == NULL) {
-        terminate_err("Error: failed to open file");
-    }
-
-    n_instr = prog_count_instr(fp) + 1;
-    rewind(fp);
-    prog_init(n_instr);
-
-    for (size_t i = 0; i < n_instr - 1; i++) {
-        Instr new_instr = prog_parse_instr(fp);
-        prog->program[i] = new_instr;
-    }
-    prog->program[n_instr-1].type = INSTR_HALT;
-
-    fclose(fp);
-}
-
-void stack_print(Instr_Type opcode)
-{
-    if (vm.sp > 0) {
-        printf("OP %2X | PC %3d:  ", opcode, prog->pc);
-        for (int i = 0; i < vm.sp; i++) {
-            printf("[%5d] ", vm.stack[i]);
-        }
-        printf("\n");
-    }
-}
+//-----------------------------------------------------------------------------
+// Instruction dispatch functions
+//-----------------------------------------------------------------------------
 
 void op_push(int value)
 {
@@ -317,8 +235,8 @@ void op_xor(void)
 
 void op_jmp(int value)
 {
-    prog->pc += value - 1;
-    if (prog->pc < 0 || prog->pc >= (int) prog->size) {
+    vm.pc += value - 1;
+    if (vm.pc < 0 || vm.pc >= (int)vm.program_size) {
         terminate_err("Error: program counter out of bounds");
     }
 }
@@ -358,13 +276,17 @@ void op_swap(void)
     vm.stack[vm.sp-2] = tmp_opnd;
 }
 
+//-----------------------------------------------------------------------------
+// Program reading and parsing
+//-----------------------------------------------------------------------------
+
 void vm_loop(void)
 {
     for (;;) {
-        if (prog->pc < 0 || prog->pc >= (int) prog->size) {
+        if (vm.pc < 0 || vm.pc >= (int)vm.program_size) {
             terminate_err("Error: program counter out of bounds");
         }
-        Instr instr = prog->program[prog->pc++];
+        Instr instr = vm.program[vm.pc++];
 
         switch (instr.type) {
             case INSTR_PUSH: {
@@ -437,11 +359,114 @@ void vm_loop(void)
             default: break;
         }
 
-        if (stack_view_option) {
+        if (opt_view) {
             stack_print(instr.type);
         }
     }
 }
+
+static size_t prog_count_instr(FILE *fp)
+{
+    int ch;
+    bool blank = true;
+    size_t n_instr = 0;
+
+    while ((ch = getc(fp)) != EOF) {
+        if (ch == '\n' && !blank) {
+            ++n_instr;
+            blank = true;
+        } else if (ch == '\n' && blank) {
+            ;
+        } else {
+            blank = false;
+        }
+    }
+
+    if (!blank) {
+        ++n_instr;
+    }
+
+    return n_instr;
+}
+
+static int prog_parse_value(FILE *fp)
+{
+    int value;
+    if (fscanf(fp, " %d", &value) == 1) {
+        return value;
+    } else {
+        terminate_err("Error: missing operand");
+    }
+    return 0;
+}
+
+static Instr prog_parse_instr(FILE *fp)
+{
+    char instr_in[INSTR_MAXLEN+1];
+    Instr new_instr;
+
+    if (fscanf(fp, " %s", instr_in) == 1) {
+        bool valid_instr = false;
+
+        for (int i = 0; i < INSTR_COUNT; i++) {
+            if (strcmp(instr_in, instr_map[i]) == 0) {
+                valid_instr = true;
+                if (i == INSTR_PUSH || i == INSTR_JMP ||
+                    i == INSTR_JMPZ || i == INSTR_JMPNZ
+                ) {
+                    int value = prog_parse_value(fp);
+                    new_instr.value = value;
+                }
+                new_instr.type = i;
+            }
+        }
+
+        if (!valid_instr) {
+            terminate_err("Error: invalid instruction");
+        }
+    } else {
+        terminate_err("Error: failed to read instruction");
+    }
+    
+    return new_instr;
+}
+
+void prog_read(char *filename)
+{
+    FILE *fp;
+    size_t n_instr;
+
+    if ((fp = fopen(filename, "r")) == NULL) {
+        terminate_err("Error: failed to open file");
+    }
+
+    n_instr = prog_count_instr(fp) + 1;
+    rewind(fp);
+    prog_init(n_instr);
+
+    for (size_t i = 0; i < n_instr - 1; i++) {
+        Instr new_instr = prog_parse_instr(fp);
+        vm.program[i] = new_instr;
+    }
+    vm.program[n_instr-1].type = INSTR_HALT;
+
+    fclose(fp);
+}
+
+void stack_print(Instr_Type opcode)
+{
+    if (vm.sp > 0) {
+        printf("OP %2X | PC %3d:  ", opcode, vm.pc);
+        for (int i = 0; i < vm.sp; i++) {
+            printf("[%5d] ", vm.stack[i]);
+        }
+        printf("\n");
+    }
+}
+
+//-----------------------------------------------------------------------------
+// Main function
+//-----------------------------------------------------------------------------
 
 int main(int argc, char *argv[])
 {
@@ -450,16 +475,14 @@ int main(int argc, char *argv[])
     }
     if (argc == 3) {
         if (strcmp(argv[2], "--view") == 0) {
-            stack_view_option = true;
+            opt_view = true;
         }
     }
 
     prog_read(argv[1]);
     vm_loop();
 
-    if (prog != NULL) {
-        prog_destroy();
-    }
+    prog_destroy();
 
     return 0;
 }
