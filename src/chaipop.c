@@ -2,9 +2,10 @@
  * File: chaipop.c
  * Date: 2026-01-20
  *
- * Virtual Machine in C. (for fun/learning)
- * Program interpreter reads instructions from a text-file.
- * The VM then executes each instruction.
+ * Virtual Machine in C (for fun and learning)
+ * The interpreter reads instructions from a text-file supplied on the
+ * command line, then the VM executes the program by dispatching the
+ * appropriate function call for each instruction.
  *
  * Licensed under the MIT License. Copyright (c) 2026 Ryan A. Rashidian
  */
@@ -15,8 +16,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#define VM_STACK_SIZE 256
-#define INSTR_MAXLEN 10
+#define MAX_STACK_SIZE 256
+#define MAX_INSTR_LEN 10
 
 //-----------------------------------------------------------------------------
 // Typedefs and enums
@@ -54,30 +55,31 @@ typedef struct {
 
 void terminate(void);
 void terminate_err(const char *message);
-void prog_init(size_t size);
-void prog_destroy(void);
 
-void op_push(int value);
-int  op_pop(void);
-void op_add(void);
-void op_sub(void);
-void op_mul(void);
-void op_eq(void);
-void op_lt(void);
-void op_gt(void);
-void op_and(void);
-void op_or(void);
-void op_xor(void);
-void op_jmp(int value);
-void op_jmpz(int value);
-void op_jmpnz(int value);
-void op_dup(void);
-void op_swap(void);
+void    prog_init(size_t size);
+void    prog_destroy(void);
+size_t  prog_count_instr(FILE *fp);
+int16_t prog_parse_value(FILE *fp);
+Instr   prog_parse_instr(FILE *fp);
+void    prog_read(char *filename);
 
-static size_t  prog_count_instr(FILE *fp);
-static int     prog_parse_value(FILE *fp);
-static Instr   prog_parse_instr(FILE *fp);
-void prog_read(char *filename);
+void    op_push(int value);
+int16_t op_pop(void);
+void    op_add(void);
+void    op_sub(void);
+void    op_mul(void);
+void    op_eq(void);
+void    op_lt(void);
+void    op_gt(void);
+void    op_and(void);
+void    op_or(void);
+void    op_xor(void);
+void    op_jmp(int value);
+void    op_jmpz(int value);
+void    op_jmpnz(int value);
+void    op_dup(void);
+void    op_swap(void);
+
 void stack_print(Instr_Type opcode);
 void vm_loop(void);
 
@@ -85,6 +87,9 @@ void vm_loop(void);
 // Global variables
 //-----------------------------------------------------------------------------
 
+static bool opt_view = false;
+
+// Used for mapping plain-text strings to instructions
 static const char *instr_map[INSTR_COUNT] = {
     "PUSH",
     "POP",
@@ -108,12 +113,10 @@ static const char *instr_map[INSTR_COUNT] = {
 static struct VM {
     int sp;
     int pc;
-    int16_t stack[VM_STACK_SIZE];
+    int16_t stack[MAX_STACK_SIZE];
     Instr *program;
     size_t program_size;
 } vm = { 0 };
-
-static bool opt_view = false;
 
 //-----------------------------------------------------------------------------
 // Initialization and cleanup
@@ -156,13 +159,13 @@ void prog_destroy(void)
 
 void op_push(int value)
 {
-    if (vm.sp >= VM_STACK_SIZE) {
+    if (vm.sp >= MAX_STACK_SIZE) {
         terminate_err("Error: stack overflow");
     }
     vm.stack[vm.sp++] = value;
 }
 
-int op_pop(void)
+int16_t op_pop(void)
 {
     if (vm.sp <= 0) {
         terminate_err("Error: stack underflow");
@@ -291,71 +294,55 @@ void vm_loop(void)
         switch (instr.type) {
             case INSTR_PUSH: {
                 op_push(instr.value);
-                break;
-            }
+            } break;
             case INSTR_POP: {
                 printf("%d\n", op_pop());
-                break;
-            }
+            } break;
             case INSTR_ADD: {
                 op_add();
-                break;
-            }
+            } break;
             case INSTR_SUB: {
                 op_sub();
-                break;
-            }
+            } break;
             case INSTR_MUL: {
                 op_mul();
-                break;
-            }
+            } break;
             case INSTR_EQ: {
                 op_eq();
-                break;
-            }
+            } break;
             case INSTR_LT: {
                 op_lt();
-                break;
-            }
+            } break;
             case INSTR_GT: {
                 op_gt();
-                break;
-            }
+            } break;
             case INSTR_AND: {
                 op_and();
-                break;
-            }
+            } break;
             case INSTR_OR: {
                 op_or();
-                break;
-            }
+            } break;
             case INSTR_XOR: {
                 op_xor();
-                break;
-            }
+            } break;
             case INSTR_JMP: {
                 op_jmp(instr.value);
-                break;
-            }
+            } break;
             case INSTR_JMPZ: {
                 op_jmpz(instr.value);
-                break;
-            }
+            } break;
             case INSTR_JMPNZ: {
                 op_jmpnz(instr.value);
-                break;
-            }
+            } break;
             case INSTR_DUP: {
                 op_dup();
-                break;
-            }
+            } break;
             case INSTR_SWAP: {
                 op_swap();
-                break;
-            }
+            } break;
             case INSTR_HALT: {
                 terminate();
-            }
+            } break;
             default: break;
         }
 
@@ -365,13 +352,14 @@ void vm_loop(void)
     }
 }
 
-static size_t prog_count_instr(FILE *fp)
+// Count instructions first to allocate space for the program
+size_t prog_count_instr(FILE *fp)
 {
     int ch;
     bool blank = true;
     size_t n_instr = 0;
 
-    while ((ch = getc(fp)) != EOF) {
+    while ((ch = fgetc(fp)) != EOF) {
         if (ch == '\n' && !blank) {
             ++n_instr;
             blank = true;
@@ -389,7 +377,7 @@ static size_t prog_count_instr(FILE *fp)
     return n_instr;
 }
 
-static int prog_parse_value(FILE *fp)
+int16_t prog_parse_value(FILE *fp)
 {
     int value;
     if (fscanf(fp, " %d", &value) == 1) {
@@ -400,16 +388,16 @@ static int prog_parse_value(FILE *fp)
     return 0;
 }
 
-static Instr prog_parse_instr(FILE *fp)
+Instr prog_parse_instr(FILE *fp)
 {
-    char instr_in[INSTR_MAXLEN+1];
+    char instr_in[MAX_INSTR_LEN+1];
     Instr new_instr;
 
     if (fscanf(fp, " %s", instr_in) == 1) {
         bool valid_instr = false;
 
         for (int i = 0; i < INSTR_COUNT; i++) {
-            if (strcmp(instr_in, instr_map[i]) == 0) {
+            if (strncmp(instr_in, instr_map[i], MAX_INSTR_LEN) == 0) {
                 valid_instr = true;
                 if (i == INSTR_PUSH || i == INSTR_JMP ||
                     i == INSTR_JMPZ || i == INSTR_JMPNZ
@@ -436,7 +424,7 @@ void prog_read(char *filename)
     FILE *fp;
     size_t n_instr;
 
-    if ((fp = fopen(filename, "r")) == NULL) {
+    if ((fp = fopen(filename, "rb")) == NULL) {
         terminate_err("Error: failed to open file");
     }
 
@@ -474,7 +462,7 @@ int main(int argc, char *argv[])
         terminate_err("Usage: chaipop <filename>");
     }
     if (argc == 3) {
-        if (strcmp(argv[2], "--view") == 0) {
+        if (strncmp(argv[2], "--view", 6) == 0) {
             opt_view = true;
         }
     }
