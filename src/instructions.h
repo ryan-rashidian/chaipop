@@ -1,5 +1,9 @@
 /*
+ * File: instructions.h
+ *
  * Instruction set for the VM
+ *
+ * Licensed under the MIT License. Copyright (c) 2026 Ryan A. Rashidian
  */
 
 #ifndef INSTRUCTIONS_H
