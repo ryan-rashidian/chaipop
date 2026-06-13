@@ -194,5 +194,6 @@ void compile(const char *file_in, const char *file_out)
 
     fclose(fp_in);
     fclose(fp_out);
+    free(offsets.data);
 }
 
