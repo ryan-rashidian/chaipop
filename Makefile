@@ -1,12 +1,31 @@
-CC=gcc
-CFLAGS=-Wall -Wextra -pedantic -O2 -std=c99
+CC = gcc
+TARGET = chaipop
 
-TARGET=chaipop
+DIR_BUILD = build
+DIR_SRC = src
 
-$(TARGET):
-	$(CC) $(CFLAGS) src/chaipop.c -o $(TARGET)
+CFLAGS = -Wall -Wextra -pedantic -std=c99
+DEBUG ?= 0
+ifeq ($(DEBUG),1)
+CFLAGS += -g -Og
+else
+CFLAGS += -O2
+endif
 
-.PHONY: clean
+SRC = $(wildcard $(DIR_SRC)/*.c)
+OBJS = $(patsubst $(DIR_SRC)/%.c,$(DIR_BUILD)/%.o,$(SRC))
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS)
+
+$(DIR_BUILD)/%.o: $(DIR_SRC)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: all clean
+
 clean:
-	rm -f $(TARGET)
+	rm -rf $(DIR_BUILD) $(TARGET)
 
