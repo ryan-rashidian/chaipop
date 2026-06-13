@@ -186,8 +186,10 @@ void compile(const char *file_in, const char *file_out)
     }
 
     init_offsets_array();
-    calculate_offsets();
 
+    // First pass to allocate meta-data
+    calculate_offsets();
+    // Second and final pass to output bytecode
     parse_instructions();
 
     fclose(fp_in);
