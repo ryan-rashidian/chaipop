@@ -66,8 +66,8 @@ static struct VM {
     struct {
         char  *data;
         size_t size;
-        size_t counter;
-        size_t counter_update;
+        int counter;
+        int counter_update;
     } prog;
 } vm = { 0 };
 
@@ -108,7 +108,7 @@ static void program_destroy(void)
 static void stack_print(uint8_t opcode)
 {
     if (vm.sp > 0) {
-        printf("OP %2X | PC %3zu:  ", opcode, vm.prog.counter);
+        printf("OP %2X | PC %3d:  ", opcode, vm.prog.counter);
         for (int i = 0; i < vm.sp; i++) {
             printf("[%5d] ", vm.stack[i]);
         }
@@ -145,7 +145,7 @@ static void interpreter_loop(void)
     uint8_t instr = INSTR_NOP;
 
     for (;;) {
-        if (vm.prog.counter < 0 || vm.prog.counter >= vm.prog.size) {
+        if (vm.prog.counter < 0 || vm.prog.counter >= (int)vm.prog.size) {
             terminate_interpreter();
         }
 
@@ -312,7 +312,7 @@ void op_xor(void)
 static void jump_to(int16_t counter_update)
 {
     if (vm.prog.counter + counter_update < 0 ||
-        vm.prog.counter + counter_update >= vm.prog.size) {
+        vm.prog.counter + counter_update >= (int)vm.prog.size) {
         fprintf(stderr, "Error: Program counter out of bounds\n");
         terminate_interpreter();
     }
@@ -322,7 +322,7 @@ static void jump_to(int16_t counter_update)
 
 void op_jmp(void)
 {
-    if (vm.prog.counter + sizeof(int16_t) >= (int)vm.prog.size) {
+    if (vm.prog.counter + sizeof(int16_t) >= vm.prog.size) {
         fprintf(stderr, "Error: Missing operand\n");
         terminate_interpreter();
     }
